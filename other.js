@@ -9,10 +9,28 @@ const skip = {
     .setDescription("Skip the current song"),
   async execute(interaction, queues) {
     const queue = queues.get(interaction.guildId);
-    if (!queue || !queue.playing)
-      return interaction.reply("❌ Nothing is playing!");
-    queue.skip();
-    await interaction.reply("⏭️ Skipped!");
+    
+    // Check if queue exists AND has active connection
+    if (!queue || !queue.playing || !queue.connection) {
+      return interaction.reply({ 
+        content: "❌ Nothing is playing!", 
+        ephemeral: true 
+      });
+    }
+    
+    try {
+      queue.skip();
+      await interaction.reply({ 
+        content: "⏭️ Skipped!", 
+        ephemeral: true 
+      });
+    } catch (err) {
+      console.error("Skip error:", err);
+      await interaction.reply({ 
+        content: "❌ Failed to skip. Try again.", 
+        ephemeral: true 
+      });
+    }
   },
 };
 
@@ -25,11 +43,28 @@ const stop = {
     .setDescription("Stop playback and clear the queue"),
   async execute(interaction, queues) {
     const queue = queues.get(interaction.guildId);
-    if (!queue || !queue.playing)
-      return interaction.reply("❌ Nothing is playing!");
-    queue.stop();
-    queues.delete(interaction.guildId);
-    await interaction.reply("⏹️ Stopped and cleared the queue.");
+    
+    if (!queue || !queue.playing) {
+      return interaction.reply({ 
+        content: "❌ Nothing is playing!", 
+        ephemeral: true 
+      });
+    }
+    
+    try {
+      queue.stop();
+      queues.delete(interaction.guildId);
+      await interaction.reply({ 
+        content: "⏹️ Stopped and cleared the queue.", 
+        ephemeral: true 
+      });
+    } catch (err) {
+      console.error("Stop error:", err);
+      await interaction.reply({ 
+        content: "❌ Failed to stop. Try again.", 
+        ephemeral: true 
+      });
+    }
   },
 };
 
@@ -42,10 +77,27 @@ const pause = {
     .setDescription("Pause the current song"),
   async execute(interaction, queues) {
     const queue = queues.get(interaction.guildId);
-    if (!queue || !queue.playing)
-      return interaction.reply("❌ Nothing is playing!");
-    const paused = queue.pause();
-    await interaction.reply(paused ? "⏸️ Paused." : "❌ Already paused.");
+    
+    if (!queue || !queue.playing) {
+      return interaction.reply({ 
+        content: "❌ Nothing is playing!", 
+        ephemeral: true 
+      });
+    }
+    
+    try {
+      const paused = queue.pause();
+      await interaction.reply({ 
+        content: paused ? "⏸️ Paused." : "❌ Already paused.", 
+        ephemeral: true 
+      });
+    } catch (err) {
+      console.error("Pause error:", err);
+      await interaction.reply({ 
+        content: "❌ Failed to pause. Try again.", 
+        ephemeral: true 
+      });
+    }
   },
 };
 
@@ -58,9 +110,27 @@ const resume = {
     .setDescription("Resume the paused song"),
   async execute(interaction, queues) {
     const queue = queues.get(interaction.guildId);
-    if (!queue) return interaction.reply("❌ Nothing is paused!");
-    const resumed = queue.resume();
-    await interaction.reply(resumed ? "▶️ Resumed!" : "❌ Not paused.");
+    
+    if (!queue) {
+      return interaction.reply({ 
+        content: "❌ Nothing is paused!", 
+        ephemeral: true 
+      });
+    }
+    
+    try {
+      const resumed = queue.resume();
+      await interaction.reply({ 
+        content: resumed ? "▶️ Resumed!" : "❌ Not paused.", 
+        ephemeral: true 
+      });
+    } catch (err) {
+      console.error("Resume error:", err);
+      await interaction.reply({ 
+        content: "❌ Failed to resume. Try again.", 
+        ephemeral: true 
+      });
+    }
   },
 };
 
@@ -73,23 +143,39 @@ const queueCmd = {
     .setDescription("Show the current song queue"),
   async execute(interaction, queues) {
     const queue = queues.get(interaction.guildId);
-    if (!queue || (!queue.current && queue.songs.length === 0))
-      return interaction.reply("📭 The queue is empty.");
-
-    const lines = [];
-    if (queue.current) {
-      lines.push(`🎵 **Now Playing:** ${queue.current.title} \`[${queue.current.duration}]\``);
-    }
-    if (queue.songs.length > 0) {
-      lines.push("\n**Up Next:**");
-      queue.songs.slice(0, 10).forEach((s, i) => {
-        lines.push(`${i + 1}. ${s.title} \`[${s.duration}]\``);
+    
+    if (!queue || (!queue.current && queue.songs.length === 0)) {
+      return interaction.reply({ 
+        content: "📭 The queue is empty.", 
+        ephemeral: true 
       });
-      if (queue.songs.length > 10) {
-        lines.push(`…and ${queue.songs.length - 10} more`);
-      }
     }
-    await interaction.reply(lines.join("\n"));
+
+    try {
+      const lines = [];
+      if (queue.current) {
+        lines.push(`🎵 **Now Playing:** ${queue.current.title} \`[${queue.current.duration}]\``);
+      }
+      if (queue.songs.length > 0) {
+        lines.push("\n**Up Next:**");
+        queue.songs.slice(0, 10).forEach((s, i) => {
+          lines.push(`${i + 1}. ${s.title} \`[${s.duration}]\``);
+        });
+        if (queue.songs.length > 10) {
+          lines.push(`…and ${queue.songs.length - 10} more`);
+        }
+      }
+      await interaction.reply({ 
+        content: lines.join("\n"), 
+        ephemeral: true 
+      });
+    } catch (err) {
+      console.error("Queue display error:", err);
+      await interaction.reply({ 
+        content: "❌ Failed to display queue.", 
+        ephemeral: true 
+      });
+    }
   },
 };
 
@@ -110,12 +196,29 @@ const volume = {
     ),
   async execute(interaction, queues) {
     const queue = queues.get(interaction.guildId);
-    if (!queue || !queue.playing)
-      return interaction.reply("❌ Nothing is playing!");
-    const level = interaction.options.getInteger("level");
-    queue.setVolume(level);
-    const emoji = level === 0 ? "🔇" : level < 50 ? "🔉" : "🔊";
-    await interaction.reply(`${emoji} Volume set to **${level}%**`);
+    
+    if (!queue || !queue.playing) {
+      return interaction.reply({ 
+        content: "❌ Nothing is playing!", 
+        ephemeral: true 
+      });
+    }
+    
+    try {
+      const level = interaction.options.getInteger("level");
+      queue.setVolume(level);
+      const emoji = level === 0 ? "🔇" : level < 50 ? "🔉" : "🔊";
+      await interaction.reply({ 
+        content: `${emoji} Volume set to **${level}%**`, 
+        ephemeral: true 
+      });
+    } catch (err) {
+      console.error("Volume error:", err);
+      await interaction.reply({ 
+        content: "❌ Failed to set volume. Try again.", 
+        ephemeral: true 
+      });
+    }
   },
 };
 
@@ -128,12 +231,27 @@ const nowplaying = {
     .setDescription("Show the currently playing song"),
   async execute(interaction, queues) {
     const queue = queues.get(interaction.guildId);
-    if (!queue || !queue.current)
-      return interaction.reply("❌ Nothing is playing!");
-    const s = queue.current;
-    await interaction.reply(
-      `🎶 **Now Playing:** ${s.title} \`[${s.duration}]\`${s.requestedBy ? ` — requested by **${s.requestedBy}**` : ""}\n🔊 Volume: **${queue.volume}%**`
-    );
+    
+    if (!queue || !queue.current) {
+      return interaction.reply({ 
+        content: "❌ Nothing is playing!", 
+        ephemeral: true 
+      });
+    }
+    
+    try {
+      const s = queue.current;
+      await interaction.reply({ 
+        content: `🎶 **Now Playing:** ${s.title} \`[${s.duration}]\`${s.requestedBy ? ` — requested by **${s.requestedBy}**` : ""}\n🔊 Volume: **${queue.volume}%**`, 
+        ephemeral: true 
+      });
+    } catch (err) {
+      console.error("NowPlaying error:", err);
+      await interaction.reply({ 
+        content: "❌ Failed to get current song.", 
+        ephemeral: true 
+      });
+    }
   },
 };
 

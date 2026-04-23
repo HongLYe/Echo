@@ -1,5 +1,5 @@
-const { SlashCommandBuilder } = require("discord.js");
-const MusicQueue = require("../MusicQueue");
+const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
+const MusicQueue = require("./MusicQueue");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -13,12 +13,25 @@ module.exports = {
     ),
 
   async execute(interaction, queues) {
-    await interaction.deferReply();
-
+    // Check voice channel permissions before deferring
     const voiceChannel = interaction.member?.voice?.channel;
     if (!voiceChannel) {
-      return interaction.editReply("❌ You must be in a voice channel!");
+      return interaction.reply({ 
+        content: "❌ You must be in a voice channel!", 
+        ephemeral: true 
+      });
     }
+
+    // Check bot permissions
+    const botPermissions = voiceChannel.permissionsFor(interaction.guild.members.me);
+    if (!botPermissions.has(PermissionFlagsBits.Connect) || !botPermissions.has(PermissionFlagsBits.Speak)) {
+      return interaction.reply({ 
+        content: "❌ I don't have permission to connect or speak in that voice channel!", 
+        ephemeral: true 
+      });
+    }
+
+    await interaction.deferReply({ ephemeral: false });
 
     const query = interaction.options.getString("query");
     const guildId = interaction.guildId;
@@ -51,8 +64,25 @@ module.exports = {
         );
       }
     } catch (err) {
-      console.error(err);
-      await interaction.editReply(`❌ Error: ${err.message}`);
+      console.error("Play command error:", err);
+      
+      // Sanitize error message for users
+      let userFriendlyError = "An unexpected error occurred. Please try again.";
+      
+      if (err.message) {
+        // Don't expose internal errors to users
+        if (err.message.includes("No results")) {
+          userFriendlyError = err.message;
+        } else if (err.message.includes("expired") || err.message.includes("unavailable")) {
+          userFriendlyError = err.message;
+        } else if (err.message.includes("Rate limit")) {
+          userFriendlyError = err.message;
+        } else if (err.message.includes("permission")) {
+          userFriendlyError = err.message;
+        }
+      }
+      
+      await interaction.editReply(`❌ Error: ${userFriendlyError}`);
     }
   },
 };
